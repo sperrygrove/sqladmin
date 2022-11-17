@@ -3,6 +3,7 @@ from typing import Any, Generator
 import pytest
 from markupsafe import Markup
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
@@ -23,6 +24,14 @@ app = Starlette()
 admin = Admin(app=app, engine=engine)
 
 
+class Friend(Base):
+    __tablename__ = "friends"
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    user = relationship("User", back_populates="friend", uselist=False)
+
 class User(Base):
     __tablename__ = "users"
 
@@ -31,6 +40,7 @@ class User(Base):
 
     addresses = relationship("Address", back_populates="user")
     profile = relationship("Profile", back_populates="user", uselist=False)
+    friend = relationship("Friend", back_populates="user", uselist=False)
 
 
 class Address(Base):
@@ -38,6 +48,7 @@ class Address(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+    postcode = Column(String)
 
     user = relationship("User", back_populates="addresses")
 
@@ -506,3 +517,30 @@ async def test_get_model_objects_uses_list_query() -> None:
 
     view.list_query = select(User).filter(User.name.endswith("man").is_(False))
     assert len(await view.get_model_objects()) == 0
+
+
+def test_model_search_query() -> None:
+    class AddressAdmin(ModelView, model=Address):
+        column_searchable_list = ["postcode", "user.name"]
+
+    from sqlalchemy.sql.expression import select
+    session = LocalSession()
+
+    stew = User(name="stew")
+    session.add(stew)
+    session.flush()
+    friend = Friend(name="Fran", user_id=stew.id)
+    session.add(friend)
+
+    address = Address(user_id=stew.id, postcode="hello")
+    session.add(address)
+    session.commit()
+    session.close()
+
+
+    addr_admin = AddressAdmin()
+    stmt = select(Address)
+    for relation in addr_admin._relations:
+        stmt = stmt.options(joinedload(relation.key))
+    res = addr_admin.search_query(stmt=stmt, term="stew")
+    print(addr_admin)

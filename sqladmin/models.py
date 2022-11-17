@@ -396,23 +396,6 @@ class ModelView(BaseView, metaclass=ModelViewMeta):
         ```
     """
 
-    save_as: ClassVar[bool] = False
-    """Set `save_as` to enable a “save as new” feature on admin change forms.
-
-    Normally, objects have three save options: “Save”, “Save and continue editing”, and “Save and add another”.
-    If save_as is True, “Save and add another” will be replaced by a “Save as new” button 
-    that creates a new object (with a new ID) rather than updating the existing object.
-
-    By default, `save_as` is set to `False`.
-    """
-
-    save_as_continue: ClassVar[bool] = True
-    """When `save_as=True`, the default redirect after saving the new object is to the edit view for that object.
-    If you set `save_as_continue=False`, the redirect will be to the list view.
-
-    By default, `save_as_continue` is set to `True`.
-    """
-
     # Templates
     list_template: ClassVar[str] = "list.html"
     """List view template. Default is `list.html`."""
@@ -681,10 +664,10 @@ class ModelView(BaseView, metaclass=ModelViewMeta):
 
         self._export_attrs = self.get_export_columns()
 
-        self._search_fields = [
-            getattr(self.model, self.get_model_attr(attr).key)
-            for attr in self.column_searchable_list
-        ]
+        # self._search_fields = [
+        #     getattr(self.model, self.get_model_attr(attr).key)
+        #     for attr in self.column_searchable_list
+        # ]
 
         self._sort_fields = [
             getattr(self.model, self.get_model_attr(attr).key)
@@ -1044,6 +1027,18 @@ class ModelView(BaseView, metaclass=ModelViewMeta):
         return stmt.filter(MyModel.name == term)
         ```
         """
+        # self._search_fields = [
+        #     getattr(self.model, self.get_model_attr(attr).key)
+        #     for attr in self.column_searchable_list
+        # ]
+        for path in self.column_searchable_list:
+            if isinstance(path, str):
+                elems = path.split('.')
+                for elem in elems:
+                    # I think we probably need to create some kind of relationship map (probably in init) so that we
+                    # we can use the relationships for joins later
+                    attr = getattr(self.model, elem)
+                    print(attr)
         expressions = [
             cast(attr, String).ilike(f"%{term}%") for attr in self._search_fields
         ]
